@@ -10,27 +10,48 @@ import Button from '@mui/material/Button';
 import Avatar from '@mui/material/Avatar';
 import TextField from '@mui/material/TextField';
 import { supabase } from '../supabaseClient';
-import { useLocation } from "react-router-dom";
 
 const Courses = () => {
   const navigate = useNavigate();
   const userName = localStorage.getItem("userName");
-  const [courses, setCourses] = useState([]); 
-const location = useLocation();
-const selectedCourseId = location.state?.courseId;
+  const [courses, setCourses] = useState([]);
+  const [enrollments, setEnrollments] = useState([]);
+  const [userId, setUserId] = useState(null);
 
   useEffect(() => {
-    fetchCourses();
+    loadData();
   }, []);
 
-  const fetchCourses = async () => {
-    const { data, error } = await supabase.from('courses').select('*');
+  const loadData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setUserId(user.id);
+
+    const { data: coursesData } = await supabase.from('courses').select('*');
+    setCourses(coursesData || []);
+
+    const { data: enrollData } = await supabase
+      .from('enrollments')
+      .select('*')
+      .eq('user_id', user.id);
+    setEnrollments(enrollData || []);
+  };
+
+  const handleEnroll = async (courseId) => {
+    const { error } = await supabase.from('enrollments').insert({
+      user_id: userId,
+      course_id: courseId,
+      progress: 0,
+    });
 
     if (error) {
-      console.log(error);
+      alert(error.message);
     } else {
-      setCourses(data);
+      loadData();
     }
+  };
+
+  const getEnrollment = (courseId) => {
+    return enrollments.find((e) => e.course_id === courseId);
   };
 
   return (
@@ -38,7 +59,6 @@ const selectedCourseId = location.state?.courseId;
       <Sidebar />
       <Box sx={{ marginLeft: "240px", padding: 2, maxWidth: 900 }}>
 
-        {/* Top Bar */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Avatar>{userName ? userName[0] : "U"}</Avatar>
@@ -47,40 +67,47 @@ const selectedCourseId = location.state?.courseId;
           <TextField size="small" placeholder="Search Course" sx={{ width: 250 }} />
         </Box>
 
-        {/* Course Cards */}
-        {courses.map((course) => (
-          <Card key={course.id} sx={{ padding: 3, marginBottom: 2 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-              <Typography variant="h6">{course.title}</Typography>
-              <Chip label="ENROLLED" color="primary" variant="outlined" />
-            </Box>
+        {courses.map((course) => {
+          const enrollment = getEnrollment(course.id);
 
-            <Box sx={{ display: "flex", justifyContent: "space-between", marginBottom: 1 }}>
-              <Typography variant="body2">Progress</Typography>
-              <Typography variant="body2">{course.progress}% Completed</Typography>
-            </Box>
-            <LinearProgress
-              variant="determinate"
-              value={course.progress}
-              sx={{ height: 8, borderRadius: 5, marginBottom: 3 }}
-            />
+          return (
+            <Card key={course.id} sx={{ padding: 3, marginBottom: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                <Typography variant="h6">{course.title}</Typography>
+                {enrollment && <Chip label="ENROLLED" color="primary" variant="outlined" />}
+              </Box>
 
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 2 }}>
-              <Typography variant="body2">Batch: {course.batch}</Typography>
-              <Typography variant="body2">Roll: {course.roll}</Typography>
-              <Typography variant="body2">Campus: {course.campus}</Typography>
-              <Typography variant="body2">City: {course.city}</Typography>
-            </Box>
-
-            <Button
-              variant="outlined"
-              fullWidth
-              onClick={() => navigate("/dashboard", { state: { courseId: course.id } })}
-            >
-              View Details
-            </Button>
-          </Card>
-        ))}
+              {enrollment ? (
+                <>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", marginBottom: 1 }}>
+                    <Typography variant="body2">Progress</Typography>
+                    <Typography variant="body2">{enrollment.progress}% Completed</Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={enrollment.progress}
+                    sx={{ height: 8, borderRadius: 5, marginBottom: 3 }}
+                  />
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    onClick={() => navigate("/dashboard", { state: { courseId: course.id } })}
+                  >
+                    View Details
+                  </Button>
+                </>
+              ) : (
+                <Button
+                   variant="contained"
+                    fullWidth
+                  onClick={() => navigate(`/enroll/${course.id}`)}
+                >
+                  Enroll Now
+              </Button>
+              )}
+            </Card>
+          );
+        })}
 
       </Box>
     </div>

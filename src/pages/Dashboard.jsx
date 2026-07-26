@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from "react-router-dom"; 
+import { useLocation } from "react-router-dom";
 import Sidebar from '../components/Sidebar';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -14,27 +14,32 @@ import { supabase } from '../supabaseClient';
 
 const Dashboard = () => {
   const userName = localStorage.getItem("userName");
-  const [courses, setCourses] = useState([]);
-  const location = useLocation();                          
+  const location = useLocation();
   const selectedCourseId = location.state?.courseId;
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
 
   useEffect(() => {
-    fetchCourses();
+    loadData();
   }, []);
 
-  const fetchCourses = async () => {
-    const { data, error } = await supabase.from('courses').select('*');
+  const loadData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from('enrollments')
+      .select('progress, batch, roll, campus, city, courses(id, title)')
+      .eq('user_id', user.id);
+
     if (error) {
       console.log(error);
     } else {
-      setCourses(data);
+      setEnrolledCourses(data);
     }
   };
 
-  // Real data se calculate karo
-  const totalCourses = courses.length;
-  const completedCourses = courses.filter((c) => c.progress === 100).length;
-  const pendingCourses = courses.filter((c) => c.progress < 100).length;
+  const totalCourses = enrolledCourses.length;
+  const completedCourses = enrolledCourses.filter((c) => c.progress === 100).length;
+  const pendingCourses = enrolledCourses.filter((c) => c.progress < 100).length;
 
   const stats = [
     { label: "Total Courses", value: totalCourses, icon: <ImportContactsIcon sx={{ color: "#1976d2" }} /> },
@@ -42,20 +47,19 @@ const Dashboard = () => {
     { label: "Pending Courses", value: pendingCourses, icon: <AccessTimeIcon sx={{ color: "orange" }} /> },
   ];
 
-  // Active course — sabse pehla course jo abhi complete nahi hua
-  const activeCourse = 
-  courses.find((c) => c.id === selectedCourseId) || 
-  courses.find((c) => c.progress < 100) || 
-  courses[0];
+  const activeCourse =
+    enrolledCourses.find((c) => c.courses.id === selectedCourseId) ||
+    enrolledCourses.find((c) => c.progress < 100) ||
+    enrolledCourses[0];
+
   return (
     <div>
       <Sidebar />
       <Box sx={{ marginLeft: "240px", padding: 3 }}>
         <Typography variant="h4" sx={{ marginBottom: 3 }}>
-          Welcome {userName}
+          Welcome, {userName}
         </Typography>
 
-        {/* Stat Cards Row */}
         <Box sx={{ display: "flex", gap: 2, marginBottom: 3, flexWrap: "wrap" }}>
           {stats.map((stat, index) => (
             <Card key={index} sx={{ flex: 1, minWidth: 200, padding: 2 }}>
@@ -70,13 +74,12 @@ const Dashboard = () => {
           ))}
         </Box>
 
-        {/* Active Course Card */}
-        {activeCourse && (
+        {activeCourse ? (
           <>
             <Typography variant="h6" sx={{ marginBottom: 1 }}>Active Course</Typography>
             <Card sx={{ padding: 3 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-                <Typography variant="h6">{activeCourse.title}</Typography>
+                <Typography variant="h6">{activeCourse.courses.title}</Typography>
                 <Chip label="ENROLLED" color="primary" variant="outlined" />
               </Box>
 
@@ -98,6 +101,8 @@ const Dashboard = () => {
               </Box>
             </Card>
           </>
+        ) : (
+          <Typography>You haven't enrolled in any course yet. Visit the Courses page to get started!</Typography>
         )}
       </Box>
     </div>
